@@ -311,6 +311,40 @@ Hooks.once('init', () => {
     });
 });
 
+Hooks.on('updateCombat', async (app, html, data) => {
+    if (!_gi_CONFIG_GROUPINITIATIVE) return;
+    if (!app) return;
+    if (_gi_CONFIG_SKIPGROUPED && !_gi_CONFIG_GROUPSAME) {
+        const { turn, turns } = app
+        let previousIndex = turn - 1;
+        if (previousIndex === -1 || !turns[previousIndex]) return;
+        let currentIndex = turn;
+        let nextIndex = turn + 1;
+        console.log("app.turns[currentIndex]", app.turns[currentIndex])
+        if (turns[previousIndex] && turns[currentIndex].actorId === turns[previousIndex].actorId) {
+            await app.update({ "turn": turn + 1 });
+        }
+        if (turns[nextIndex] && turns[currentIndex].actorId === turns[nextIndex].actorId && turns[currentIndex].actorId !== turns[previousIndex].actorId) {
+            for (let i = nextIndex + 1; i <= turns.length; i++) {
+                if (i >= turns.length) {
+                    const uniqueActorIds = turns.filter(turn => turn.actorId);
+                    if (uniqueActorIds.length > 1) {
+                        const actor = game.actors.get(turns[0].actorId);
+                        if (actor.hasPlayerOwner && !game.user.isGM) {
+                            return ui.notifications.info(`Get ready ${actor.name}, you're up after this group`)
+                        }
+                    }
+                } else if (turns[i].actorId !== turns[currentIndex].actorId) {
+                    const actor = game.actors.get(turns[i].actorId);
+                    if (actor.hasPlayerOwner && !game.user.isGM) {
+                        return ui.notifications.info(`Get ready ${actor.name}, you're up after this group`)
+                    }
+                }
+            }
+        }
+    }
+}); 
+
 Hooks.on('renderCombatTracker', async (app, html, data) => {
     // if not using grouped initiative, return
     if (!_gi_CONFIG_GROUPINITIATIVE) return;
@@ -322,41 +356,7 @@ Hooks.on('renderCombatTracker', async (app, html, data) => {
 
     GroupInitiative.overrideRollMethods(combat);
 
-    if (_gi_CONFIG_SKIPGROUPED && !_gi_CONFIG_GROUPSAME) {
-        const activeCombatantId = html.find("li.active")?.attr("data-combatant-id");
-        let groups = GroupInitiative.getGroups(combat.turns).filter((x) => x.length >= 2);
-
-        let inGroup = false;
-        for (let groupItem of groups)
-        {
-            if (inGroup) {
-                break;
-            }
-
-            const parent = groupItem[0].id;
-            for (let combatant of groupItem)
-            {
-                if (combatant.id === activeCombatantId && activeCombatantId !== parent)
-                {
-                    inGroup = true;
-                    break;
-                }
-            }
-        }
-
-        if (inGroup)
-        {
-            if (game.combat.current.round < game.combat.previous.round) {
-                return game.combat.previousTurn();
-            } else if (game.combat.current.turn < game.combat.previous.turn) {
-                return game.combat.previousTurn();
-            } else {
-                return game.combat.nextTurn();
-            }
-        }
-    }
-
-    // if you want to group the combatants into groups - TODO: NEED TO FIX!!
+        // if you want to group the combatants into groups - TODO: NEED TO FIX!!
     if (_gi_CONFIG_GROUPSAME) {
         let combatants = combat.turns;
         // create initiative groups; array of arrays
